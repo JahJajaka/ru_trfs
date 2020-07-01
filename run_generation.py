@@ -26,10 +26,10 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 
-from transformers import (GPT2Config, OpenAIGPTConfig, XLNetConfig, TransfoXLConfig, 
-                                    GPT2LMHeadModel, GPT2Tokenizer, 
-                                    OpenAIGPTLMHeadModel, OpenAIGPTTokenizer, 
-                                    XLNetLMHeadModel, XLNetTokenizer, 
+from transformers import (GPT2Config, OpenAIGPTConfig, XLNetConfig, TransfoXLConfig,
+                                    GPT2LMHeadModel, GPT2Tokenizer,
+                                    OpenAIGPTLMHeadModel, OpenAIGPTTokenizer,
+                                    XLNetLMHeadModel, XLNetTokenizer,
                                     TransfoXLLMHeadModel, TransfoXLTokenizer, )
 
 
@@ -40,7 +40,8 @@ logger = logging.getLogger(__name__)
 
 MAX_LENGTH = int(10000)  # Hardcoded max length to avoid infinite loop
 
-ALL_MODELS = sum((tuple(conf.pretrained_config_archive_map.keys()) for conf in (GPT2Config, OpenAIGPTConfig, XLNetConfig, TransfoXLConfig)), ())
+#ALL_MODELS = sum((tuple(conf.pretrained_config_archive_map.keys()) for conf in (GPT2Config, OpenAIGPTConfig, XLNetConfig, TransfoXLConfig)), ())
+ALL_MODELS = sum((conf for conf in (GPT2Config.get_config_dict('gpt2'), OpenAIGPTConfig.get_config_dict("openai-gpt"))), ())
 
 MODEL_CLASSES = {
     'gpt2': (GPT2LMHeadModel, GPT2Tokenizer),
@@ -102,7 +103,7 @@ def top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')
         logits[indices_to_remove] = filter_value
     return logits
 
-def sample_sequence(model, length, context, num_samples=1, temperature=1, top_k=0, top_p=0.0, 
+def sample_sequence(model, length, context, num_samples=1, temperature=1, top_k=0, top_p=0.0,
                     is_xlnet=False, device='cpu', max_input=1023, filter_single=[], filter_double=[]):
     context = torch.tensor(context, dtype=torch.long, device=device)
     context = context.unsqueeze(0).repeat(num_samples, 1)
@@ -111,7 +112,7 @@ def sample_sequence(model, length, context, num_samples=1, temperature=1, top_k=
         for _ in trange(length):
 
             inputs = {'input_ids': generated[:,-max_input:]}
-            if is_xlnet: 
+            if is_xlnet:
                 # XLNet is a direct (predict same token, not next token) and bi-directional model by default
                 # => need one additional dummy token in the input (will be masked), attention mask and target mapping (see model docstring)
                 input_ids = torch.cat((generated, torch.zeros((1, 1), dtype=torch.long, device=device)), dim=1)
@@ -171,7 +172,7 @@ def main():
     if args.length < 0 and model.config.max_position_embeddings > 0:
         args.length = model.config.max_position_embeddings
     elif 0 < model.config.max_position_embeddings < args.length:
-        args.length = model.config.max_position_embeddings  # No generation bigger than model size 
+        args.length = model.config.max_position_embeddings  # No generation bigger than model size
     elif args.length < 0:
         args.length = MAX_LENGTH  # avoid infinite loop
 
