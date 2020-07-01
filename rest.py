@@ -31,16 +31,24 @@ model = GPT2LMHeadModel.from_pretrained(model_path)
 model.to(device)
 model.eval()
 
-poetry_model = GPT2LMHeadModel.from_pretrained(model_path + '/poetry')
-poetry_model.to(device)
-poetry_model.eval()
+#poetry_model = GPT2LMHeadModel.from_pretrained(model_path + '/poetry')
+#poetry_model.to(device)
+#poetry_model.eval()
 
 from apex import amp
-[model, poetry_model] = amp.initialize([model, poetry_model], opt_level='O2')
+[model] = amp.initialize([model], opt_level='O2')
 
-def get_sample(model, prompt, length:int, num_samples:int, allow_linebreak:bool):
+def get_sample(
+                model,
+                prompt,
+                length:int,
+                num_samples:int,
+                allow_linebreak:bool,
+                temperature:float,
+                top_p:float,
+                top_k:int):
     logger.info(prompt)
-   
+
     filter_n = tokenizer.encode('\n')[-1:]
     filter_single = [1] + tokenizer.encode('[')[-1:] + tokenizer.encode('(')[-1:]
     filter_single += [] if allow_linebreak else filter_n
@@ -50,9 +58,9 @@ def get_sample(model, prompt, length:int, num_samples:int, allow_linebreak:bool)
         model=model,
         context=context_tokens,
         length=length,
-        temperature=1,
-        top_k=0,
-        top_p=0.9,
+        temperature=temperature,
+        top_k=top_k,
+        top_p=top_p,
         device=device,
         filter_single=filter_single,
         filter_double=filter_n,
@@ -61,7 +69,7 @@ def get_sample(model, prompt, length:int, num_samples:int, allow_linebreak:bool)
 
     prompt = tokenizer.decode(context_tokens)
     len_prompt = len(prompt)
-   
+
     replies = [out[item, :].tolist() for item in range(len(out))]
     text = [tokenizer.decode(item)[len_prompt:] for item in replies]
     reg_text = [re.match(r'[\w\W]*[\.!?]\n', item) for item in text]
@@ -87,14 +95,25 @@ lock = threading.RLock()
 
 class Prompt(BaseModel):
     prompt:str = Schema(..., max_length=3000, title='Model prompt')
-    length:int = Schema(15, ge=1, le=60, title='Number of tokens generated in each sample')
-    num_samples:int = Schema(3, ge=1, le=5, title='Number of samples generated')
+    length:int = Schema(150, ge=1, le=200, title='Number of tokens generated in each sample')
+    num_samples:int = Schema(3, ge=1, le=3, title='Number of samples generated')
     allow_linebreak:bool = Schema(False, title='Allow linebreak in a sample')
+    temperature:float = Schema(1.0, title='temperature')
+    top_p:float = Schema(0.9, title='top_p')
+    top_k:int = Schema(0, title='top_k')
 
 @app.post("/" + model_path + "/")
 def gen_sample(prompt: Prompt):
     with lock:
-        return {"replies": get_sample(model, prompt.prompt, prompt.length, prompt.num_samples, prompt.allow_linebreak)}
+        return {"replies": get_sample(
+                                    model,
+                                    prompt.prompt,
+                                    prompt.length,
+                                    prompt.num_samples,
+                                    prompt.allow_linebreak,
+                                    prompt.temperature,
+                                    prompt.top_p,
+                                    prompt.top_k)}
 
 class PromptPoetry(BaseModel):
     prompt:str = Schema(..., max_length=3000, title='Model prompt')
