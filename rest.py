@@ -23,21 +23,18 @@ for handler in logging.root.handlers[:]:
 logging.basicConfig(filename=f"logs/{hash(flavor_id)}.log", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-model_path = 'gpt2/medium'
 
-tokenizer = YTEncoder.from_pretrained(model_path)
-
-model = GPT2LMHeadModel.from_pretrained(model_path)
-model.to(device)
-model.eval()
-
-#poetry_model = GPT2LMHeadModel.from_pretrained(model_path + '/poetry')
-#poetry_model.to(device)
-#poetry_model.eval()
+BASE_PATH = '../../content/drive/My Drive/Colab Notebooks/ru_trfs_inference/ckpts/'
+model_paths = ['medium',
+               'gradual_unfreeze',
+               'all_unfreeze',
+               'noy']
+tokenizer = YTEncoder.from_pretrained(BASE_PATH+model_paths[0])
+models = [GPT2LMHeadModel.from_pretrained(BASE_PATH+m_path).to(device).eval() for m_path in model_paths]
 
 from apex import amp
-[model] = amp.initialize([model], opt_level='O2')
-
+models = amp.initialize(models, opt_level='O2')
+print(f'{len(models)} models loaded for inference. URLs: {model_paths}')
 def get_sample(
                 model,
                 prompt,
@@ -102,11 +99,14 @@ class Prompt(BaseModel):
     top_p:float = Schema(0.9, title='top_p')
     top_k:int = Schema(0, title='top_k')
 
-@app.post("/" + model_path + "/")
-def gen_sample(prompt: Prompt):
+
+
+@app.post("/{model_path}/")
+def gen_sample(prompt: Prompt, model_path: str ):
     with lock:
+        rmodels = [model for path, model in zip(model_paths,models) if path==model_path]
         return {"replies": get_sample(
-                                    model,
+                                    rmodels[0],
                                     prompt.prompt,
                                     prompt.length,
                                     prompt.num_samples,
